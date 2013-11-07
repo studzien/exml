@@ -5,26 +5,7 @@
 -define(LEXER, exml_xpath_scan).
 -define(PARSER, exml_xpath_parse).
 
--define(IS_OPERATOR(Name), (Name =:= "and" orelse
-                            Name =:= "or"  orelse
-                            Name =:= "div" orelse
-                            Name =:= "mod")).
--define(IS_NODETYPE(Name), (Name =:= "comment" orelse
-                            Name =:= "text"    orelse
-                            Name =:= "node")).
--define(IS_AXIS(Name), (Name =:= "ancestor" orelse
-                        Name =:= "ancestor-or-self" orelse
-                        Name =:= "attribute" orelse
-                        Name =:= "child" orelse
-                        Name =:= "descendant" orelse
-                        Name =:= "descendant-or-self" orelse
-                        Name =:= "following" orelse
-                        Name =:= "following-sibling" orelse
-                        Name =:= "namespace" orelse
-                        Name =:= "parent" orelse
-                        Name =:= "preceding" orelse
-                        Name =:= "preceding-sibling" orelse
-                        Name =:= "self")).
+-include("exml_xpath.hrl").
 
 scan(Input) ->
     case ?LEXER:string(Input) of
@@ -34,8 +15,8 @@ scan(Input) ->
 
 parse(Input) ->
     {ok, Tokens, _} = scan(Input),
-    error_logger:info_msg("~p~n", [Tokens]),
-    ?PARSER:parse(Tokens).
+    {ok, ParseTree} = ?PARSER:parse(Tokens),
+    ParseTree.
 
 fix_tokens([], Acc) ->
     lists:reverse(Acc);

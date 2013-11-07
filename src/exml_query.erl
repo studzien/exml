@@ -7,12 +7,45 @@
 
 -include("exml.hrl").
 
+-export([xpath/2, xpath/3]).
+-export([q/2, q/3]).
 -export([path/2, path/3]).
 -export([paths/2]).
 -export([subelement/2, subelement/3]).
 -export([subelements/2]).
 -export([attr/2, attr/3]).
 -export([cdata/1]).
+
+xpath(Element, Query) ->
+    xpath(Element, Query, undefined).
+
+xpath(Element, QueryString, Default) when is_binary(QueryString) ->
+    xpath(Element, binary_to_list(QueryString), Default);
+xpath(Element, QueryString, Default) when is_list(QueryString) ->
+    Query = exml_xpath:parse(QueryString),
+    q(Element, Query, Default).
+
+q(Element, Query) ->
+    q(Element, Element, Query, undefined).
+
+q(Element, Query, Default) ->
+    q(Element, Element, Query, Default).
+
+q(Result, _, [], _) ->
+    Result;
+q(List, Root, Query, Default) when is_list(List) ->
+    [q(Element, Root, Query, Default) || Element <- List];
+q(#xmlel{}=Element, Root, {path, Path}, Default) when is_list(Path) ->
+    q(#xmlel{children=[Element]}, Root, lists:flatten(Path), Default);
+q(#xmlel{}=Element, Root, {path, Path}, Default) ->
+    q(#xmlel{children=[Element]}, Root, [Path], Default);
+q(#xmlel{}=Element, Root, [{element, Name} | Rest], Default) ->
+    Child = subelement(Element, Name),
+    q(Child, Root, Rest, Default);
+q(#xmlel{}=Element, _Root, [{attr, Name}], Default) ->
+    attr(Element, Name, Default);
+q(_, _, _, Default) ->
+    Default.
 
 -type path() :: [cdata | {element, binary()} | {attr, binary()}].
 

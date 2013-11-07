@@ -70,33 +70,33 @@ Rootsymbol
 'Expr'.
 
 %% [1]
-'LocationPath' -> 'RelativeLocationPath' : {path, rel, '$1'}.
-'LocationPath' -> 'AbsoluteLocationPath' : {path, abs, '$1'}.
+'LocationPath' -> 'RelativeLocationPath' : {path, '$1'}.
+'LocationPath' -> 'AbsoluteLocationPath' : {abs_path, '$1'}.
 
 %% [2]
 'AbsoluteLocationPath' -> '/' 'RelativeLocationPath' : '$2'.
-'AbsoluteLocationPath' -> '/' : '/'.
+'AbsoluteLocationPath' -> 'AbbreviatedAbsoluteLocationPath' : '$1'.
 
 %% [3]
 'RelativeLocationPath' -> 'Step' : '$1'.
-'RelativeLocationPath' -> 'RelativeLocationPath' '/' 'Step' : {'$1', '/', '$3'}.
+'RelativeLocationPath' -> 'RelativeLocationPath' '/' 'Step' : ['$1', '$3'].
 'RelativeLocationPath' -> 'AbbreviatedRelativeLocationPath' : '$1'.
 
 %% [4]
 'Step' -> 'axis' '::' 'NodeTest' '<PredicateList>' :
-    {step, {value('$1'), '$3', '$4'}}.
+    {value('$1'), '$3', '$4'}.
 'Step' -> 'axis' '::' 'NodeTest' :
-    {step, {value('$1'), '$3', []}}.
+    {value('$1'), '$3'}.
 'Step' -> '@' 'name' '<PredicateList>' :
-    {step, {'attribute', '$2', '$3'}}.
+    {'attr', value('$2'), '$3'}.
 'Step' -> '@' 'name' :
-    {step, {'attribute', '$2', []}}.
+    {'attr', value('$2')}.
 'Step' -> 'NodeTest' '<PredicateList>' :
-    {step, {'child', '$1', '$2'}}.
+    {'element', '$1', '$2'}.
 'Step' -> 'NodeTest' :
-    {step, {'child', '$1', []}}.
+    {'element', '$1'}.
 'Step' -> 'AbbreviatedStep' :
-    {abbreviated_step, '$1'}.
+    '$1'.
 
 '<PredicateList>' -> '<PredicateMember>' : lists:reverse('$1').
 
@@ -197,10 +197,12 @@ Rootsymbol
 %% [37]
 'NameTest' -> 'wildcard' : 'wildcard'.
 'NameTest' -> 'prefix' : {'prefix', value('$1')}.
-'NameTest' -> 'name' : {'name', value('$1')}.
+'NameTest' -> 'name' : value('$1').
 
 Erlang code.
 value({Token, _Line}) ->
     Token;
+value({_Token, _Line, Value}) when is_list(Value) ->
+    list_to_binary(Value);
 value({_Token, _Line, Value}) ->
     Value.
