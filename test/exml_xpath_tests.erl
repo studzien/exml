@@ -132,6 +132,30 @@ attributes_values_test() ->
     BBB3 = #xmlel{name = <<"BBB">>, attrs = [{<<"name">>, <<" bbb ">>}]},
     [BBB3, BBB2] = exml_xpath:q(XML, "//BBB[normalize-space(@name)='bbb']").
 
+count_test() ->
+    XML = xml(<<"<AAA>"
+                    "<CCC>"
+                        "<BBB/>"
+                        "<BBB/>"
+                        "<BBB/>"
+                    "</CCC>"
+                    "<DDD>"
+                        "<BBB/>"
+                        "<BBB/>"
+                    "</DDD>"
+                    "<EEE>"
+                        "<CCC/>"
+                        "<DDD/>"
+                    "</EEE>"
+                "</AAA>">>),
+    BBB = #xmlel{name = <<"BBB">>},
+    DDD = #xmlel{name = <<"DDD">>, children = [BBB, BBB]},
+    [DDD] = exml_xpath:q(XML, "//*[count(BBB)=2]"),
+    CCC = #xmlel{name = <<"CCC">>, children = [BBB, BBB, BBB]},
+    Result = exml_xpath:q(XML, "//*[count(*)=3]"),
+    2 = length(Result),
+    [#xmlel{name = <<"AAA">>}] = Result -- [CCC].
+
 
 %%--------------------------------------------------------------------
 %% helpers

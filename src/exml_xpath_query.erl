@@ -30,6 +30,10 @@ q(El, [{element, wildcard}|Rest], State) ->
 q(El, [{element, Name}|Rest], State) ->
     Children = exml_query:subelements(El, Name),
     q(Children, Rest, State);
+q(El, [{element, wildcard, Predicates}|Rest], State) ->
+    Children = El#xmlel.children,
+    Filtered = apply_predicates(Children, Predicates),
+    q(Filtered, Rest, State);
 q(El, [{element, Name, Predicates}|Rest], State) ->
     Children = exml_query:subelements(El, Name),
     Filtered = apply_predicates(Children, Predicates),
@@ -96,4 +100,6 @@ resolve({function, <<"normalize-space">>, [Arg]}, Element) ->
         _ ->
             undefined
     end;
+resolve({function, <<"count">>, [Arg]}, Element) ->
+    length(resolve(Arg, Element));
 resolve(Other, Element)  -> q(Element, Other, #st{root=Element}).
