@@ -9,18 +9,11 @@ Digit = [0-9]
 Whitespace = [\000-\s]+
 Literal = ('[^\']+'|"[^\"]+")
 
-%% all chars but ':' should be here:
-Name = [a-zA-Z]+
+Name = [a-zA-Z-]+
 QualifiedName = ({Name}:{Name}|{Name})
 Reference = \${QualifiedName}
 
 Rules.
-%% Name test
-%% the following rule has to be specially treated
-\*              : {token, {'*', TokenLine, '*'}}.
-{Name}:\*       : {token, {prefix, TokenLine, nc_name(TokenChars)}}.
-{Name}:{Name}   : {token, {name, TokenLine, q_name(TokenChars)}}.
-{Name}          : {token, {name, TokenLine, TokenChars}}.
 %% Expression tokens
 \(   : {token, {'(', TokenLine}}.
 \)   : {token, {')', TokenLine}}.
@@ -51,6 +44,11 @@ Rules.
 {Digit}+\.{Digit}+ : {token, {number, TokenLine, list_to_float(TokenChars)}}.
 %% Reference
 {Reference} : {token, {reference, TokenLine, reference(TokenChars, TokenLen)}}.
+%% Name test
+\*              : {token, {'*', TokenLine}}.
+{Name}:\*       : {token, {prefix, TokenLine, nc_name(TokenChars)}}.
+{Name}:{Name}   : {token, {name, TokenLine, q_name(TokenChars)}}.
+{Name}          : {token, {name, TokenLine, TokenChars}}.
 %% Whitespace
 {Whitespace} : skip_token.
 

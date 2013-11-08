@@ -1,67 +1,99 @@
 -module(exml_xpath_query).
 
--export([q/2, q/3]).
+-export([q/2]).
 
 -include("exml.hrl").
 
--record(st, {root, default}).
+-record(st, {root}).
 
 q(Element, Query) ->
-    q(Element, Element, Query, undefined).
-
-q(Element, Query, Default) ->
     Root = #xmlel{children=[Element]},
-    State = #st{root = Root,
-                default = Default},
-    do_q(Root, Query, State).
+    State = #st{root = Root},
+    q(Root, Query, State).
 
-do_q(El, [], _) ->
+q(El, [], _) ->
     El;
-do_q(List, Path, State) when is_list(List) ->
-    L = [do_q(Element, Path, State) || Element <- List],
+q(List, Path, State) when is_list(List) ->
+    L = [q(Element, Path, State) || Element <- List],
     lists:flatten(L);
-do_q(_El, {abs_path, AbsPath}, #st{root=R}=State) ->
+q(_El, {abs_path, AbsPath}, #st{root=R}=State) ->
     error_logger:info_msg("~p~n", [path(AbsPath)]),
-    do_q(R, path(AbsPath), State);
-do_q(El, [{elements, Path}|Rest], State) ->
-    Children = all_children(El),
-    Els = do_q(Children, path(Path), State),
-    do_q(Els, Rest, State);
-do_q(El, [{element, Name}|Rest], State) ->
+    q(R, path(AbsPath), State);
+q(El, {path, Path}, State) ->
+    q(El, path(Path), State);
+q(El, [{all, Path}|Rest], State) ->
+    Children = all_elements(El),
+    Els = q(Children, path(Path), State),
+    q(Els, Rest, State);
+q(El, [{element, wildcard}|Rest], State) ->
+    q(El#xmlel.children, Rest, State);
+q(El, [{element, Name}|Rest], State) ->
     Children = exml_query:subelements(El, Name),
-    do_q(Children, Rest, State);
-do_q(_, _, #st{default=Default}) ->
-    Default.
-
-q(Result, _, [], _) ->
-    Result;
-q(List, Root, Query, Default) when is_list(List) ->
-    [q(Element, Root, Query, Default) || Element <- List];
-q(#xmlel{}=Element, Root, {path, Path}, Default) when is_list(Path) ->
-    q(#xmlel{children=[Element]}, Root, lists:flatten(Path), Default);
-q(#xmlel{}=Element, Root, {path, Path}, Default) ->
-    q(#xmlel{children=[Element]}, Root, [Path], Default);
-q(#xmlel{}=Element, Root, [{element, Name} | Rest], Default) ->
-    Child = exml_query:subelement(Element, Name),
-    q(Child, Root, Rest, Default);
-q(#xmlel{}=Element, _Root, [{attr, Name}], Default) ->
-    exml_query:attr(Element, Name, Default);
-q(_, _, _, Default) ->
-    Default.
+    q(Children, Rest, State);
+q(El, [{element, Name, Predicates}|Rest], State) ->
+    Children = exml_query:subelements(El, Name),
+    Filtered = apply_predicates(Children, Predicates),
+    q(Filtered, Rest, State);
+q(El, [{attr, Name}|_Rest], _State) ->
+    exml_query:attr(El, Name, []);
+q(_, _, _) ->
+    [].
 
 path(List) when is_list(List) ->
     lists:flatten(List);
 path(Other) ->
     [Other].
 
-all_children(Element) ->
-    lists:flatten(do_all_children(Element)).
+all_elements(Element) ->
+    lists:flatten(do_all_elements(Element)).
 
-do_all_children(#xmlel{children = Children}) ->
-    lists:foldl(fun(#xmlel{}=El, Acc) ->
-                [El | do_all_children(El)] ++ Acc;
-            (_, Acc) ->
-                Acc
-        end, [], Children);
-do_all_children(_) ->
+do_all_elements(#xmlel{children=Children}=Element) ->
+    Childrens = [do_all_elements(Child) || Child <- Children],
+    [Element | Childrens];
+do_all_elements(_) ->
     [].
+
+apply_predicates(Elements, Predicates) ->
+    Funs = [predicate_fun(Pred) || Pred <- Predicates],
+    lists:foldl(fun(Fun, Acc) -> Fun(Acc) end, Elements, Funs).
+
+predicate_fun({number, N}) ->
+    fun(Elements) -> lists:nth(N, Elements) end;
+predicate_fun({function, <<"last">>, []}) ->
+    fun(Elements) -> lists:last(Elements) end;
+predicate_fun({function, <<"not">>, [Pred]}) ->
+    Fun = predicate_fun(Pred),
+    fun(Elements) -> Elements -- Fun(Elements) end;
+predicate_fun({comp, '=', A1, A2}) ->
+    fun(Elements) ->
+            lists:filter(fun(Element) ->
+                        resolve(A1, Element) =:= resolve(A2, Element)
+                end, Elements)
+    end;
+predicate_fun({path, {attr, wildcard}}) ->
+    fun(Elements) ->
+            lists:filter(fun
+                    (#xmlel{attrs=[]}) -> false;
+                    (_) -> true
+                end, Elements)
+    end;
+predicate_fun({path, {attr, Attr}}) ->
+    fun(Elements) ->
+            lists:filter(fun(Element) ->
+                        exml_query:attr(Element, Attr) =/= undefined
+                end, Elements)
+    end;
+predicate_fun(_Other) ->
+    fun(Elements) -> Elements end.
+
+resolve({literal, L}, _) -> L;
+resolve({number, N}, _)  -> N;
+resolve({function, <<"normalize-space">>, [Arg]}, Element) ->
+    case resolve(Arg, Element) of
+        Bin when is_binary(Bin) ->
+            Stripped = string:strip(binary_to_list(Bin), both, $ ),
+            list_to_binary(Stripped);
+        _ ->
+            undefined
+    end;
+resolve(Other, Element)  -> q(Element, Other, #st{root=Element}).

@@ -1,20 +1,19 @@
 -module(exml_xpath).
 
--export([q/2, q/3]).
+-export([q/2]).
+
+-compile(export_all).
 
 -define(LEXER, exml_xpath_scan).
 -define(PARSER, exml_xpath_parse).
 
 -include("exml_xpath.hrl").
 
-q(Element, Query) ->
-    q(Element, Query, undefined).
-
-q(Element, QueryString, Default) when is_binary(QueryString) ->
-    q(Element, binary_to_list(QueryString), Default);
-q(Element, QueryString, Default) when is_list(QueryString) ->
+q(Element, QueryString) when is_binary(QueryString) ->
+    q(Element, binary_to_list(QueryString));
+q(Element, QueryString) when is_list(QueryString) ->
     Query = parse(QueryString),
-    exml_xpath_query:q(Element, Query, Default).
+    exml_xpath_query:q(Element, Query).
 
 parse(Input) ->
     {ok, Tokens, _} = scan(Input),
@@ -29,9 +28,9 @@ scan(Input) ->
 
 fix_tokens([], Acc) ->
     lists:reverse(Acc);
-fix_tokens([Preceding, {'*', TokenLine, '*'}|Rest], Acc) ->
+fix_tokens([Preceding, {'*', TokenLine}|Rest], Acc) ->
     Acc1 = case check_preceding(Preceding) of
-        true  -> [{'*', TokenLine, '*'},Preceding|Acc];
+        true  -> [{'*', TokenLine},Preceding|Acc];
         false -> [{wildcard, TokenLine, wildcard},Preceding|Acc]
     end,
     fix_tokens(Rest, Acc1);

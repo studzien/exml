@@ -91,6 +91,10 @@ Rootsymbol
     {'attr', value('$2'), '$3'}.
 'Step' -> '@' 'name' :
     {'attr', value('$2')}.
+'Step' -> '@' 'wildcard' '<PredicateList>' :
+    {'attr', 'wildcard', '$3'}.
+'Step' -> '@' 'wildcard' :
+    {'attr', 'wildcard'}.
 'Step' -> 'NodeTest' '<PredicateList>' :
     {'element', '$1', '$2'}.
 'Step' -> 'NodeTest' :
@@ -109,7 +113,7 @@ Rootsymbol
 'NodeTest' -> 'processing-instruction' '(' 'literal' ')' : {processing_instruction, '$3'}.
 
 %% [8]
-'Predicate' -> '[' 'PredicateExpr' ']' : {predicate, '$2'}.
+'Predicate' -> '[' 'PredicateExpr' ']' : '$2'.
 
 %% [9]
 'PredicateExpr' -> 'Expr' : '$1'.
@@ -143,7 +147,7 @@ Rootsymbol
 '<ArgumentMember>' -> 'Argument' : ['$1'].
 
 %% [17]
-'Argument' -> 'Expr'.
+'Argument' -> 'Expr' : '$1'.
 
 %% [18]
 'UnionExpr' -> 'PathExpr' : '$1'.
