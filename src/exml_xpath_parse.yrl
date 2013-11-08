@@ -115,7 +115,7 @@ Rootsymbol
 'PredicateExpr' -> 'Expr' : '$1'.
 
 %% [10]
-'AbbreviatedAbsoluteLocationPath' -> '//' 'RelativeLocationPath' : {'//', '$2'}.
+'AbbreviatedAbsoluteLocationPath' -> '//' 'RelativeLocationPath' : {all, '$2'}.
 
 %% [11]
 'AbbreviatedRelativeLocationPath' -> 'RelativeLocationPath' '//' 'Step' : {'$1', '//', '$3'}.

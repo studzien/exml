@@ -1,22 +1,31 @@
 -module(exml_xpath).
 
--export([parse/1]).
+-export([q/2, q/3]).
 
 -define(LEXER, exml_xpath_scan).
 -define(PARSER, exml_xpath_parse).
 
 -include("exml_xpath.hrl").
 
-scan(Input) ->
-    case ?LEXER:string(Input) of
-        {ok, Tokens, Lines} -> {ok, fix_tokens(Tokens, []), Lines};
-        Other               -> Other
-    end.
+q(Element, Query) ->
+    q(Element, Query, undefined).
+
+q(Element, QueryString, Default) when is_binary(QueryString) ->
+    q(Element, binary_to_list(QueryString), Default);
+q(Element, QueryString, Default) when is_list(QueryString) ->
+    Query = parse(QueryString),
+    exml_xpath_query:q(Element, Query, Default).
 
 parse(Input) ->
     {ok, Tokens, _} = scan(Input),
     {ok, ParseTree} = ?PARSER:parse(Tokens),
     ParseTree.
+
+scan(Input) ->
+    case ?LEXER:string(Input) of
+        {ok, Tokens, Lines} -> {ok, fix_tokens(Tokens, []), Lines};
+        Other               -> Other
+    end.
 
 fix_tokens([], Acc) ->
     lists:reverse(Acc);
