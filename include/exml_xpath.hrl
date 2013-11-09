@@ -1,3 +1,12 @@
+-record(st, {root,
+             lut = dict:new(), %% lookup table for elements
+             an = dict:new()}). %% ancestors table
+
+-record(xpathel, {id = 0,
+                  name,
+                  attrs = [],
+                  children = []}).
+
 -define(IS_OPERATOR(Name), (Name =:= "and" orelse
                             Name =:= "or"  orelse
                             Name =:= "div" orelse

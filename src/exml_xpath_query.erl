@@ -1,105 +1,183 @@
 -module(exml_xpath_query).
 
 -export([q/2]).
+-export([q/3, attr/3]).
 
 -include("exml.hrl").
-
--record(st, {root}).
+-include("exml_xpath.hrl").
 
 q(Element, Query) ->
     Root = #xmlel{children=[Element]},
-    State = #st{root = Root},
-    q(Root, Query, State).
+    NewRoot = build_elements(Root),
+    {LUT, Ancestors} = build_lut(NewRoot),
+    State = #st{root = NewRoot,
+                lut = LUT,
+                an = Ancestors},
+    q(NewRoot, Query, State).
 
-q(El, [], _) ->
-    El;
+q(List, [], S) when is_list(List) -> 
+    [q(Elem, [], S) || Elem <- List];
+q(#xpathel{}=El, [], S) ->
+    #xmlel{name=El#xpathel.name,
+           attrs=El#xpathel.attrs,
+           children=q(El#xpathel.children, [], S)};
+q(El, [], _) -> El;
+
 q(List, Path, State) when is_list(List) ->
     L = [q(Element, Path, State) || Element <- List],
     lists:flatten(L);
+
+q(El,  {union, Part1, Part2}, State) ->
+    lists:flatten([q(El, Part1, State), q(El, Part2, State)]);
+
 q(_El, {abs_path, AbsPath}, #st{root=R}=State) ->
+    P = path(AbsPath),
     error_logger:info_msg("~p~n", [path(AbsPath)]),
-    q(R, path(AbsPath), State);
+    q(R, P, State);
+
 q(El, {path, Path}, State) ->
-    q(El, path(Path), State);
+    P = path(Path),
+    q(El, P, State);
+
 q(El, [{all, Path}|Rest], State) ->
     Children = all_elements(El),
     Els = q(Children, path(Path), State),
     q(Els, Rest, State);
+
 q(El, [{element, wildcard}|Rest], State) ->
-    q(El#xmlel.children, Rest, State);
+    q(El#xpathel.children, Rest, State);
+
 q(El, [{element, Name}|Rest], State) ->
-    Children = exml_query:subelements(El, Name),
+    Children = subelements(El, Name),
     q(Children, Rest, State);
+
 q(El, [{element, wildcard, Predicates}|Rest], State) ->
-    Children = El#xmlel.children,
-    Filtered = apply_predicates(Children, Predicates),
+    Children = El#xpathel.children,
+    Filtered = exml_xpath_pred:apply(Children, Predicates),
     q(Filtered, Rest, State);
+
 q(El, [{element, Name, Predicates}|Rest], State) ->
-    Children = exml_query:subelements(El, Name),
-    Filtered = apply_predicates(Children, Predicates),
+    Children = subelements(El, Name),
+    Filtered = exml_xpath_pred:apply(Children, Predicates),
     q(Filtered, Rest, State);
+
+q(El, [Tuple|Rest], State) when is_tuple(Tuple), element(1, Tuple) =:= child ->
+    q(El, [setelement(1, Tuple, element)|Rest], State);
+
 q(El, [{attr, Name}|_Rest], _State) ->
-    exml_query:attr(El, Name, []);
+    attr(El, Name, []);
+
+q(El, [{descendant, wildcard}|Rest], State) ->
+    Children = all_children(El),
+    q(Children, Rest, State);
+
+q(El, [{descendant, Name}|Rest], State) ->
+    Children = name_children(El, Name),
+    q(Children, Rest, State);
+
+q(El,[{parent, wildcard}|Rest], State) ->
+    q(parent(El, State), Rest, State);
+
+q(El,[{parent, Name}|Rest], State) ->
+    case parent(El, State) of
+        #xpathel{name=Name}=El -> q(El, Rest, State);
+        _                      -> q([], Rest, State)
+    end;
+
+q(El,[{ancestor, wildcard}|Rest], State) ->
+    Els = lists:filter(fun
+                (#xpathel{name=undefined}) -> false;
+                (_) -> true
+            end, ancestors(El, State)),
+    q(Els, Rest, State);
+
+q(El,[{ancestor, Name}|Rest], State) ->
+    Els = lists:filter(fun
+                (#xpathel{name=N}) when Name =:= N -> true;
+                (_) -> false
+            end, ancestors(El, State)),
+    q(Els, Rest, State);
+
 q(_, _, _) ->
     [].
+
+parent(#xpathel{id=Id}, #st{an=An}=State) ->
+    case dict:find(Id, An) of
+        {ok, [Parent|_]} -> lut(Parent, State);
+        _                -> undefined
+    end.
+
+ancestors(#xpathel{id=Id}, #st{an=An}=State) ->
+    {ok, Ancestors} = dict:find(Id, An),
+    [lut(Ancestor, State) || Ancestor <- Ancestors].
+
+lut(#xpathel{id=Id}, State) ->
+    lut(Id, State);
+lut(Id, #st{lut=LUT}) ->
+    {ok, Value} = dict:find(Id, LUT),
+    Value.
 
 path(List) when is_list(List) ->
     lists:flatten(List);
 path(Other) ->
     [Other].
 
+subelements(#xpathel{children = Children}, Name) ->
+    lists:filter(fun(#xpathel{name = N}) when N =:= Name ->
+                        true;
+                    (_) ->
+                        false
+                 end, Children).
+
+attr(#xpathel{attrs = Attrs}, Name, Default) ->
+    case lists:keyfind(Name, 1, Attrs) of
+        {Name, Value} ->
+            Value;
+        false ->
+            Default
+    end.
+
 all_elements(Element) ->
     lists:flatten(do_all_elements(Element)).
-
-do_all_elements(#xmlel{children=Children}=Element) ->
+do_all_elements(#xpathel{children=Children}=Element) ->
     Childrens = [do_all_elements(Child) || Child <- Children],
     [Element | Childrens];
 do_all_elements(_) ->
     [].
 
-apply_predicates(Elements, Predicates) ->
-    Funs = [predicate_fun(Pred) || Pred <- Predicates],
-    lists:foldl(fun(Fun, Acc) -> Fun(Acc) end, Elements, Funs).
+all_children(Element) ->
+    lists:flatten(do_all_children(Element)).
+do_all_children(#xpathel{children=Children}) ->
+    Children ++ [do_all_children(Child) || Child <- Children];
+do_all_children(_) ->
+    [].
 
-predicate_fun({number, N}) ->
-    fun(Elements) -> lists:nth(N, Elements) end;
-predicate_fun({function, <<"last">>, []}) ->
-    fun(Elements) -> lists:last(Elements) end;
-predicate_fun({function, <<"not">>, [Pred]}) ->
-    Fun = predicate_fun(Pred),
-    fun(Elements) -> Elements -- Fun(Elements) end;
-predicate_fun({comp, '=', A1, A2}) ->
-    fun(Elements) ->
-            lists:filter(fun(Element) ->
-                        resolve(A1, Element) =:= resolve(A2, Element)
-                end, Elements)
-    end;
-predicate_fun({path, {attr, wildcard}}) ->
-    fun(Elements) ->
-            lists:filter(fun
-                    (#xmlel{attrs=[]}) -> false;
-                    (_) -> true
-                end, Elements)
-    end;
-predicate_fun({path, {attr, Attr}}) ->
-    fun(Elements) ->
-            lists:filter(fun(Element) ->
-                        exml_query:attr(Element, Attr) =/= undefined
-                end, Elements)
-    end;
-predicate_fun(_Other) ->
-    fun(Elements) -> Elements end.
+name_children(Element, Name) ->
+    lists:filter(fun
+            (#xpathel{name=N}) when N =:= Name -> true;
+            (_) -> false
+        end, all_children(Element)).
 
-resolve({literal, L}, _) -> L;
-resolve({number, N}, _)  -> N;
-resolve({function, <<"normalize-space">>, [Arg]}, Element) ->
-    case resolve(Arg, Element) of
-        Bin when is_binary(Bin) ->
-            Stripped = string:strip(binary_to_list(Bin), both, $ ),
-            list_to_binary(Stripped);
-        _ ->
-            undefined
-    end;
-resolve({function, <<"count">>, [Arg]}, Element) ->
-    length(resolve(Arg, Element));
-resolve(Other, Element)  -> q(Element, Other, #st{root=Element}).
+%% Function used for query preparation
+build_elements(Element) ->
+    {NewElement, _} = do_build_elements(Element, 1),
+    NewElement.
+
+do_build_elements(#xmlel{name=Name, attrs=Attrs, children=Children}, Id) ->
+    {NewChildren, NewId} = lists:foldr(fun(Child, {ChildrenAcc, IdAcc}) ->
+                    {NewChild, NewIdAcc} = do_build_elements(Child, IdAcc),
+                    {[NewChild|ChildrenAcc], NewIdAcc}
+            end, {[], Id+1}, Children),
+    {#xpathel{id=Id, name=Name, attrs=Attrs, children=NewChildren}, NewId}.
+
+build_lut(Element) ->
+    {LUT, Ancestors} = do_build_lut(Element, [], [], []),
+    {dict:from_list(LUT), dict:from_list(Ancestors)}.
+
+do_build_lut(#xpathel{id=Id, children=Children}=Element, LUT, Ancestors, CurrentAncestors) ->
+    LUT1 = [{Id, Element} | LUT],
+    Ancestors1 = [{Id, CurrentAncestors} | Ancestors],
+    NewAncestors = [Id | CurrentAncestors],
+    lists:foldl(fun(Child, {AccLut, AccAncestors}) ->
+                do_build_lut(Child, AccLut, AccAncestors, NewAncestors)
+        end, {LUT1, Ancestors1}, Children).

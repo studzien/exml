@@ -151,7 +151,7 @@ Rootsymbol
 
 %% [18]
 'UnionExpr' -> 'PathExpr' : '$1'.
-'UnionExpr' -> 'UnionExpr' '|' 'PathExpr' : {path, union, {'$1', '$3'}}.
+'UnionExpr' -> 'UnionExpr' '|' 'PathExpr' : {union, '$1', '$3'}.
 
 %% [19]
 'PathExpr' -> 'LocationPath' : '$1'.
