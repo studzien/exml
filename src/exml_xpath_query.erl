@@ -42,8 +42,11 @@ q(El,[{all, Path}|Rest], State) ->
     Children = all_elements(El),
     Els = q(Children, path(Path), State),
     q(Els, Rest, State);
+q(El,[{element, {node,text}, _}|Rest], State) ->
+    q(cdata(El), Rest, State);
 q(El,[{element, Name, Predicates}|Rest], State) ->
-    q(?APPLY(El#xpathel.children, Name, Predicates), Rest, State);
+    Children = [Child || #xpathel{}=Child <- El#xpathel.children],
+    q(?APPLY(Children, Name, Predicates), Rest, State);
 q(El,[{attr, Name, Predicates}|Rest], State) ->
     Attrs = attr(El, Name, []),
     Filtered = exml_xpath_pred:apply(Attrs, Predicates),
@@ -74,6 +77,9 @@ q(El, [Tuple|Rest], State) when is_tuple(Tuple), element(1, Tuple) =:= child ->
 
 q(_, _, _) ->
     [].
+
+cdata(#xpathel{children = Children}) ->
+    list_to_binary([exml:unescape_cdata(C) || #xmlcdata{} = C <- Children]).
 
 preceding(El, State) ->
     Siblings = preceding_sibling(El, State),
@@ -160,7 +166,7 @@ attr(#xpathel{attrs = Attrs}, Name, Default) ->
 all_elements(Element) ->
     lists:flatten(do_all_elements(Element)).
 do_all_elements(#xpathel{children=Children}=Element) ->
-    Childrens = [do_all_elements(Child) || Child <- Children],
+    Childrens = [do_all_elements(Child) || #xpathel{}=Child <- Children],
     [Element | Childrens];
 do_all_elements(_) ->
     [].
@@ -168,7 +174,7 @@ do_all_elements(_) ->
 descendant(Element) ->
     lists:flatten(do_descendant(Element)).
 do_descendant(#xpathel{children=Children}) ->
-    Children ++ [do_descendant(Child) || Child <- Children];
+    Children ++ [do_descendant(Child) || #xpathel{}=Child <- Children];
 do_descendant(_) ->
     [].
 
@@ -185,7 +191,9 @@ do_build_elements(#xmlel{name=Name, attrs=Attrs, children=Children}, Id) ->
     {#xpathel{id=Id,
               name=Name,
               attrs=Attrs,
-              children=lists:reverse(NewChildren)}, NewId}.
+              children=lists:reverse(NewChildren)}, NewId};
+do_build_elements(Other, Id) ->
+    {Other, Id}.
 
 build_lut(Element) ->
     {LUT, Ancestors} = do_build_lut(Element, [], [], []),
@@ -198,4 +206,6 @@ do_build_lut(#xpathel{id=Id, children=Children}=Element,
     NewAncestors = [Id | CurrentAncestors],
     lists:foldl(fun(Child, {AccLut, AccAncestors}) ->
                 do_build_lut(Child, AccLut, AccAncestors, NewAncestors)
-        end, {LUT1, Ancestors1}, Children).
+        end, {LUT1, Ancestors1}, Children);
+do_build_lut(_Other, LUT, Ancestors, _CurrentAncestors) ->
+    {LUT, Ancestors}.

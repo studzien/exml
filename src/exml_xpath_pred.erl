@@ -3,6 +3,7 @@
 -export([apply/2, pred/1]).
 -compile({no_auto_import, [apply/2]}).
 
+-include("exml.hrl").
 -include("exml_xpath.hrl").
 
 -define(FILTER(Pred), (fun(Elements) -> lists:filter((Pred)(Elements), Elements) end)).

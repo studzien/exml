@@ -9,7 +9,7 @@ Digit = [0-9]
 Whitespace = [\000-\s]+
 Literal = ('[^\']+'|"[^\"]+")
 
-Name = [a-zA-Z-]+
+Name = [a-zA-Z-0-9]+
 QualifiedName = ({Name}:{Name}|{Name})
 Reference = \${QualifiedName}
 
