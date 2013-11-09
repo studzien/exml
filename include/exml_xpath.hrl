@@ -1,6 +1,7 @@
 -record(st, {root,
              lut = dict:new(), %% lookup table for elements
-             an = dict:new()}). %% ancestors table
+             an = dict:new(),
+             acc = []}). %% ancestors table
 
 -record(xpathel, {id = 0,
                   name,

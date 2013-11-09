@@ -382,8 +382,233 @@ following_sibling_test() ->
     Result1 = exml_xpath:q(XML, "/AAA/BBB/following-sibling::*"),
     2 = length(Result1),
     CCC = #xmlel{name = <<"CCC">>, children = [#xmlel{name = <<"DDD">>}]},
-    [#xmlel{name = <<"XXX">>}] = Result1 -- [CCC].
+    [#xmlel{name = <<"XXX">>}] = Result1 -- [CCC],
 
+    Result2 = exml_xpath:q(XML, "//CCC/following-sibling::*"),
+    3 = length(Result2),
+    DDD = #xmlel{name = <<"DDD">>},
+    FFF1 = #xmlel{name = <<"FFF">>},
+    FFF2 = #xmlel{name = <<"FFF">>, children = [#xmlel{name = <<"GGG">>}]},
+    [] = Result2 -- [DDD, FFF1, FFF2].
+
+preceding_sibling_test() ->
+    XML = xml(<<"<AAA>" 
+                    "<BBB>"
+                        "<CCC/>"
+                        "<DDD/>"
+                    "</BBB>"
+                    "<XXX>"
+                        "<DDD>"
+                            "<EEE/>"
+                            "<DDD/>"
+                            "<CCC/>"
+                            "<FFF/>"
+                            "<FFF>"
+                                "<GGG/>"
+                            "</FFF>"
+                        "</DDD>"
+                    "</XXX>"
+                    "<CCC>"
+                        "<DDD/>"
+                    "</CCC>"
+                "</AAA>">>),
+
+    Result1 = exml_xpath:q(XML, "/AAA/XXX/preceding-sibling::*"),
+    BBB = #xmlel{name = <<"BBB">>, children = [#xmlel{name = <<"CCC">>},
+                                               #xmlel{name = <<"DDD">>}]},
+    [BBB] = Result1,
+
+    Result2 = exml_xpath:q(XML, "//CCC/preceding-sibling::*"),
+    EEE = #xmlel{name = <<"EEE">>},
+    DDD = #xmlel{name = <<"DDD">>},
+    4 = length(Result2),
+    [#xmlel{name = <<"XXX">>}] = Result2 -- [BBB, EEE, DDD].
+
+following_test() ->
+    XML = xml(<<"<AAA>"
+                    "<BBB>"
+                        "<CCC/>"
+                        "<ZZZ>"
+                            "<DDD/>"
+                            "<DDD>"
+                                "<EEE/>"
+                            "</DDD>"
+                        "</ZZZ>"
+                        "<FFF>"
+                            "<GGG/>"
+                        "</FFF>"
+                    "</BBB>"
+                    "<XXX>"
+                        "<DDD>"
+                            "<EEE/>"
+                            "<DDD/>"
+                            "<CCC/>"
+                            "<FFF/>"
+                            "<FFF>"
+                                "<GGG/>"
+                            "</FFF>"
+                        "</DDD>"
+                    "</XXX>"
+                    "<CCC>"
+                        "<DDD/>"
+                    "</CCC>"
+                "</AAA>">>),
+    Result1 = exml_xpath:q(XML, "/AAA/XXX/following::*"),
+    DDD = #xmlel{name = <<"DDD">>},
+    CCC = #xmlel{name = <<"CCC">>, children = [DDD]},
+    [CCC,DDD] = Result1,
+
+    Result2 = exml_xpath:q(XML, "//ZZZ/following::*"),
+    12 = length(Result2).
+
+preceding_test() ->
+    XML = xml(<<"<AAA>"
+                    "<BBB>"
+                        "<CCC/>"
+                        "<ZZZ>"
+                            "<DDD/>"
+                        "</ZZZ>"
+                    "</BBB>"
+                    "<XXX>"
+                        "<DDD>"
+                            "<EEE/>"
+                            "<DDD/>"
+                            "<CCC/>"
+                            "<FFF/>"
+                            "<FFF>"
+                                "<GGG/>"
+                            "</FFF>"
+                        "</DDD>"
+                    "</XXX>"
+                    "<CCC>"
+                        "<DDD/>"
+                    "</CCC>"
+            "</AAA>">>),
+    Result1 = exml_xpath:q(XML, "/AAA/XXX/preceding::*"),
+    DDD = #xmlel{name = <<"DDD">>},
+    ZZZ = #xmlel{name = <<"ZZZ">>, children = [DDD]},
+    CCC = #xmlel{name = <<"CCC">>},
+    BBB = #xmlel{name = <<"BBB">>, children = [CCC, ZZZ]},
+    4 = length(Result1),
+    [] = Result1 -- [DDD, ZZZ, CCC, BBB],
+
+    Result2 = exml_xpath:q(XML, "//GGG/preceding::*"),
+    8 = length(Result2),
+    FFF = #xmlel{name = <<"FFF">>},
+    EEE = #xmlel{name = <<"EEE">>},
+    [] = Result2 -- [DDD, ZZZ, CCC, BBB, EEE, DDD, CCC, FFF].
+
+descendant_or_self_test() ->
+    XML = xml(<<"<AAA>" 
+                    "<BBB>"
+                        "<CCC/>"
+                        "<ZZZ>"
+                            "<DDD/>"
+                        "</ZZZ>"
+                    "</BBB>"
+                    "<XXX>"
+                        "<DDD>"
+                            "<EEE/>"
+                            "<DDD/>"
+                            "<CCC/>"
+                            "<FFF/>"
+                            "<FFF>"
+                                "<GGG/>"
+                            "</FFF>"
+                        "</DDD>"
+                    "</XXX>"
+                    "<CCC>"
+                        "<DDD/>"
+                    "</CCC>"
+                "</AAA>">>),
+    Result1 = exml_xpath:q(XML, "/AAA/XXX/descendant-or-self::*"),
+    8 = length(Result1),
+    Result2 = exml_xpath:q(XML, "//CCC/descendant-or-self::*"),
+    DDD = #xmlel{name = <<"DDD">>},
+    CCC1 = #xmlel{name = <<"CCC">>},
+    CCC2 = #xmlel{name = <<"CCC">>, children = [DDD]},
+    [] = Result2 -- [DDD, CCC1, CCC1, CCC2].
+
+ancestor_or_self_test() ->
+    XML = xml(<<"<AAA>"
+                    "<BBB>"
+                        "<CCC/>"
+                        "<ZZZ>"
+                            "<DDD/>"
+                        "</ZZZ>"
+                    "</BBB>"
+                    "<XXX>"
+                        "<DDD>"
+                            "<EEE/>"
+                            "<DDD/>"
+                            "<CCC/>"
+                            "<FFF/>"
+                            "<FFF>"
+                                "<GGG/>"
+                            "</FFF>"
+                        "</DDD>"
+                    "</XXX>"
+                    "<CCC>"
+                        "<DDD/>"
+                    "</CCC>"
+            "</AAA>">>),
+    Result1 = exml_xpath:q(XML, "/AAA/XXX/DDD/EEE/ancestor-or-self::*"),
+    4 = length(Result1),
+
+    Result2 = exml_xpath:q(XML, "//GGG/ancestor-or-self::*"),
+    5 = length(Result2).
+
+axes_union_test() ->
+    XML = xml(<<"<AAA>"
+                    "<BBB>"
+                        "<CCC/>"
+                        "<ZZZ/>"
+                    "</BBB>"
+                    "<XXX>"
+                        "<DDD>"
+                            "<EEE/>"
+                            "<FFF>"
+                                "<HHH/>"
+                                "<GGG>"
+                                    "<JJJ>"
+                                        "<QQQ/>"
+                                    "</JJJ>"
+                                    "<JJJ/>"
+                                "</GGG>"
+                                "<HHH/>"
+                            "</FFF>"
+                        "</DDD>"
+                    "</XXX>"
+                    "<CCC>"
+                        "<DDD/>"
+                    "</CCC>"
+                "</AAA>">>),
+    Result = exml_xpath:q(XML, "//GGG/ancestor::* | //GGG/descendant::* | "
+                               "//GGG/following::* | //GGG/preceding::* | "
+                               "//GGG/self::*"),
+    16 = length(Result).
+
+arith_test() ->
+    XML = xml(<<"<AAA>"
+                    "<BBB/>"
+                    "<BBB/>"
+                    "<BBB/>"
+                    "<BBB/>"
+                    "<BBB/>"
+                    "<BBB/>"
+                    "<BBB/>"
+                    "<BBB/>"
+                    "<CCC/>"
+                    "<CCC/>"
+                    "<CCC/>"
+                "</AAA>">>),
+    BBB = #xmlel{name = <<"BBB">>},
+    [BBB, BBB, BBB, BBB] = exml_xpath:q(XML, "//BBB[position() mod 2 = 0]"),
+    [BBB, BBB] = exml_xpath:q(XML, "//BBB[position() = floor(last() div 2 + 0.5) or "
+                                   "position() = ceiling(last() div 2 + 0.5)]"),
+    CCC = #xmlel{name = <<"CCC">>},
+    [CCC, CCC] = exml_xpath:q(XML, "//CCC[position() = floor(last() div 2 + 0.5) or "
+                              "position() = ceiling(last() div 2 + 0.5)]").
 %%--------------------------------------------------------------------
 %% helpers
 %%--------------------------------------------------------------------
