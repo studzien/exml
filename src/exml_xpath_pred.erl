@@ -6,7 +6,12 @@
 -include("exml.hrl").
 -include("exml_xpath.hrl").
 
--define(FILTER(Pred), (fun(Elements) -> lists:filter((Pred)(Elements), Elements) end)).
+-define(FILTER(Pred, Args),
+        (fun(Elements) ->
+                lists:filter(fun(Element) ->
+                            NewArgs = [resolve(Arg, Element, Elements) || Arg <- Args],
+                            erlang:apply(Pred, [Element|NewArgs])
+                    end, Elements) end)).
 
 apply(Elements, Predicates) ->
     Funs = [pred(Pred) || Pred <- Predicates],
@@ -22,21 +27,21 @@ pred({function, <<"not">>, [Pred]}) ->
     Fun = pred(Pred),
     fun(Elements) -> Elements -- Fun(Elements) end;
 pred({function, <<"starts-with">>, [A1, A2]}) ->
-    ?FILTER(starts_with_fun(A1, A2));
+    ?FILTER(fun starts_with_fun/3, [A1, A2]);
 pred({function, <<"contains">>, [A1, A2]}) ->
-    ?FILTER(contains_fun(A1, A2));
+    ?FILTER(fun contains_fun/3, [A1, A2]);
 pred({comp, '=', A1, A2}) ->
-    ?FILTER(equals_fun(A1, A2));
+    ?FILTER(fun equals_fun/3, [A1, A2]);
 pred({comp, '!=', A1, A2}) ->
-    ?FILTER(not_equal_fun(A1, A2));
+    ?FILTER(fun not_equal_fun/3, [A1, A2]);
 pred({comp, '<', A1, A2}) ->
-    ?FILTER(lesser_fun(A1, A2));
+    ?FILTER(fun lesser_fun/3, [A1, A2]);
 pred({comp, '<=', A1, A2}) ->
-    ?FILTER(lesser_equal_fun(A1, A2));
+    ?FILTER(fun lesser_equal_fun/3, [A1, A2]);
 pred({comp, '>', A1, A2}) ->
-    ?FILTER(greater_fun(A1, A2));
+    ?FILTER(fun greater_fun/3, [A1, A2]);
 pred({comp, '>=', A1, A2}) ->
-    ?FILTER(greater_equal_fun(A1, A2));
+    ?FILTER(fun greater_equal_fun/3, [A1, A2]);
 pred({bool, 'or', Pred1, Pred2}) ->
     fun(Elements) ->
             Fun1 = pred(Pred1),
@@ -54,9 +59,9 @@ pred({bool, 'and', Pred1, Pred2}) ->
             Els1 -- Els2
     end;
 pred({path, {attr, wildcard, Predicates}}) ->
-    apply(?FILTER(attr_fun()), Predicates);
+    apply(?FILTER(fun attr_fun/1, []), Predicates);
 pred({path, {attr, Attr, Predicates}}) ->
-    apply(?FILTER(attr_fun(Attr)), Predicates);
+    apply(?FILTER(fun attr_fun/2, [Attr]), Predicates);
 pred(_Other) ->
     fun(Elements) -> Elements end.
 
@@ -93,18 +98,18 @@ resolve({function, <<"ceiling">>, [Arg]}, Element, Elements) ->
         Pos when Pos > 0 -> T + 1;
         _ -> T
     end;
-resolve({arith, '*', A1, A2}, Element, Elements) ->
-    resolve_apply(fun(X,Y) -> X*Y end, [A1, A2], Element, Elements);
-resolve({arith, '+', A1, A2}, Element, Elements) ->
-    resolve_apply(fun(X,Y) -> X+Y end, [A1, A2], Element, Elements);
-resolve({arith, '-', A1, A2}, Element, Elements) ->
-    resolve_apply(fun(X,Y) -> X-Y end, [A1, A2], Element, Elements);
-resolve({arith, mod, A1, A2}, Element, Elements) ->
-    resolve_apply(fun(X,Y) -> X rem Y end, [A1, A2], Element, Elements);
-resolve({arith, 'div', A1, A2}, Element, Elements) ->
-    resolve_apply(fun(X,Y) -> X div Y end, [A1, A2], Element, Elements);
-resolve(Other, Element, _Elements) ->
-    exml_xpath_query:q(Element, Other, #st{root=Element}).
+resolve({arith, Op, A1, A2}, Element, Elements) ->
+    resolve_apply(arith_fun(Op), [A1, A2], Element, Elements);
+resolve({path, _}=Path, Element, _Elements) ->
+    exml_xpath_query:q(Element, Path, #st{root=Element});
+resolve(Other, _Element, _Elements) ->
+    Other.
+
+arith_fun('*') -> fun(X,Y) -> X*Y end;
+arith_fun('+') -> fun(X,Y) -> X+Y end;
+arith_fun('-') -> fun(X,Y) -> X-Y end;
+arith_fun(mod) -> fun(X,Y) -> X rem Y end;
+arith_fun('div') -> fun(X,Y) -> X div Y end.
 
 resolve_apply(Fun, Args, Element, Elements) ->
     NewArgs = [resolve(Arg, Element, Elements) || Arg <- Args],
@@ -122,86 +127,34 @@ normalize_space(_) ->
     undefined.
 
 %% Predicates helpers
-attr_fun() ->
-    fun(_Elements) ->
-            fun(#xpathel{attrs=[]}) -> false;
-                (_)                 -> true
-            end
-    end.
+attr_fun(#xpathel{attrs=[]}) ->
+    false;
+attr_fun(_) ->
+    true.
 
-attr_fun(Attr) ->
-    fun(_Elements) ->
-            fun(Element) ->
-                    exml_xpath_query:attr(Element, Attr, undefined) =/= undefined
-            end
-    end.
+attr_fun(Element, Attr) ->
+    exml_xpath_query:attr(Element, Attr, undefined) =/= undefined.
 
-greater_fun(A1, A2) ->
-    fun(Elements) ->
-            fun(Element) ->
-                    resolve(A1, Element, Elements) > resolve(A2, Element, Elements)
-            end
-    end.
+greater_fun(_, A1, A2) -> A1 > A2.
+greater_equal_fun(_, A1, A2) -> A1 >= A2.
+lesser_fun(_, A1, A2) -> A1 < A2.
+lesser_equal_fun(_, A1, A2) -> A1 =< A2.
+equals_fun(_, A1, A2) -> A1 == A2.
+not_equal_fun(_, A1, A2) -> A1 /= A2.
 
-greater_equal_fun(A1, A2) ->
-    fun(Elements) ->
-            fun(Element) ->
-                    resolve(A1, Element, Elements) >= resolve(A2, Element, Elements)
-            end
-    end.
-
-lesser_fun(A1, A2) ->
-    fun(Elements) ->
-            fun(Element) ->
-                    resolve(A1, Element, Elements) < resolve(A2, Element, Elements)
-            end
-    end.
-
-lesser_equal_fun(A1, A2) ->
-    fun(Elements) ->
-            fun(Element) ->
-                    resolve(A1, Element, Elements) =< resolve(A2, Element, Elements)
-            end
-    end.
-
-equals_fun(A1, A2) ->
-    fun(Elements) ->
-            fun(Element) ->
-                    resolve(A1,Element,Elements) == resolve(A2,Element,Elements)
-            end
-    end.
-
-not_equal_fun(A1, A2) ->
-    fun(Elements) ->
-            fun(Element) ->
-                    resolve(A1,Element,Elements) /= resolve(A2,Element,Elements)
-            end
-    end.
-
-starts_with_fun(A1, A2) ->
-    fun(Elements) ->
-            fun(Element) -> starts_with(resolve(A1, Element, Elements), 
-                                        resolve(A2, Element, Elements))
-            end
-    end.
-starts_with(R1, R2) when is_binary(R1), is_binary(R2) ->
-    Size = byte_size(R2),
-    case binary:match(R1, R2) of
+starts_with_fun(_, A1, A2) when is_binary(A1), is_binary(A2) ->
+    Size = byte_size(A2),
+    case binary:match(A1, A2) of
         {0, Size} -> true;
         _         -> false
     end;
-starts_with(_, _) ->
+starts_with_fun(_, _, _) ->
     false.
 
-contains_fun(A1, A2) ->
-    fun(Elements) ->
-            fun(Element) -> contains(resolve(A1, Element, Elements),
-                                     resolve(A2, Element, Elements)) end
-    end.
-contains(R1, R2) when is_binary(R1), is_binary(R2) ->
-    case binary:match(R1, R2) of
+contains_fun(_, A1, A2) when is_binary(A1), is_binary(A2) ->
+    case binary:match(A1, A2) of
         nomatch -> false;
         _       -> true
     end;
-contains(_, _) ->
+contains_fun(_, _, _) ->
     false.
