@@ -379,7 +379,10 @@ following_sibling_test() ->
                         "<DDD/>"
                     "</CCC>"
                 "</AAA>">>),
-    a.
+    Result1 = exml_xpath:q(XML, "/AAA/BBB/following-sibling::*"),
+    2 = length(Result1),
+    CCC = #xmlel{name = <<"CCC">>, children = [#xmlel{name = <<"DDD">>}]},
+    [#xmlel{name = <<"XXX">>}] = Result1 -- [CCC].
 
 %%--------------------------------------------------------------------
 %% helpers

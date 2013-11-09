@@ -86,19 +86,19 @@ Rootsymbol
 'Step' -> 'axis' '::' 'NodeTest' '<PredicateList>' :
     {value('$1'), '$3', '$4'}.
 'Step' -> 'axis' '::' 'NodeTest' :
-    {value('$1'), '$3'}.
+    {value('$1'), '$3', []}.
 'Step' -> '@' 'name' '<PredicateList>' :
     {'attr', value('$2'), '$3'}.
 'Step' -> '@' 'name' :
-    {'attr', value('$2')}.
+    {'attr', value('$2'), []}.
 'Step' -> '@' 'wildcard' '<PredicateList>' :
     {'attr', 'wildcard', '$3'}.
 'Step' -> '@' 'wildcard' :
-    {'attr', 'wildcard'}.
+    {'attr', 'wildcard' ,[]}.
 'Step' -> 'NodeTest' '<PredicateList>' :
     {'element', '$1', '$2'}.
 'Step' -> 'NodeTest' :
-    {'element', '$1'}.
+    {'element', '$1', []}.
 'Step' -> 'AbbreviatedStep' :
     '$1'.
 

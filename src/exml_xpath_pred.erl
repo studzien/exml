@@ -1,6 +1,7 @@
 -module(exml_xpath_pred).
 
 -export([apply/2, pred/1]).
+-compile({no_auto_import, [apply/2]}).
 
 -include("exml_xpath.hrl").
 
@@ -29,10 +30,10 @@ pred({comp, '<', A1, A2}) ->
     ?FILTER(lesser_fun(A1, A2));
 pred({comp, '>', A1, A2}) ->
     ?FILTER(greater_fun(A1, A2));
-pred({path, {attr, wildcard}}) ->
-    ?FILTER(attr_fun());
-pred({path, {attr, Attr}}) ->
-    ?FILTER(attr_fun(Attr));
+pred({path, {attr, wildcard, Predicates}}) ->
+    apply(?FILTER(attr_fun()), Predicates);
+pred({path, {attr, Attr, Predicates}}) ->
+    apply(?FILTER(attr_fun(Attr)), Predicates);
 pred(_Other) ->
     fun(Elements) -> Elements end.
 

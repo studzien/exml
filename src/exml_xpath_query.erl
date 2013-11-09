@@ -44,13 +44,6 @@ q(El, [{all, Path}|Rest], State) ->
     Els = q(Children, path(Path), State),
     q(Els, Rest, State);
 
-q(El, [{element, wildcard}|Rest], State) ->
-    q(El#xpathel.children, Rest, State);
-
-q(El, [{element, Name}|Rest], State) ->
-    Children = subelements(El, Name),
-    q(Children, Rest, State);
-
 q(El, [{element, wildcard, Predicates}|Rest], State) ->
     Children = El#xpathel.children,
     Filtered = exml_xpath_pred:apply(Children, Predicates),
@@ -64,50 +57,85 @@ q(El, [{element, Name, Predicates}|Rest], State) ->
 q(El, [Tuple|Rest], State) when is_tuple(Tuple), element(1, Tuple) =:= child ->
     q(El, [setelement(1, Tuple, element)|Rest], State);
 
-q(El, [{attr, Name}|_Rest], _State) ->
-    attr(El, Name, []);
+q(El, [{attr, Name, Predicates}|Rest], State) ->
+    Attrs = attr(El, Name, []),
+    error_logger:info_msg("~p~n", [Attrs]),
+    Filtered = exml_xpath_pred:apply(Attrs, Predicates),
+    q(Filtered, Rest, State);
 
-q(El, [{descendant, wildcard}|Rest], State) ->
+q(El, [{descendant, wildcard, Predicates}|Rest], State) ->
     Children = all_children(El),
-    q(Children, Rest, State);
+    Filtered = exml_xpath_pred:apply(Children, Predicates),
+    q(Filtered, Rest, State);
 
-q(El, [{descendant, Name}|Rest], State) ->
+q(El, [{descendant, Name, Predicates}|Rest], State) ->
     Children = name_children(El, Name),
-    q(Children, Rest, State);
+    Filtered = exml_xpath_pred:apply(Children, Predicates),
+    q(Filtered, Rest, State);
 
-q(El,[{parent, wildcard}|Rest], State) ->
-    q(parent(El, State), Rest, State);
+q(El,[{parent, wildcard, Predicates}|Rest], State) ->
+    Parent = parent(El, State),
+    Filtered = exml_xpath_pred:apply(Parent, Predicates),
+    q(Filtered, Rest, State);
 
-q(El,[{parent, Name}|Rest], State) ->
+q(El,[{parent, Name, Predicates}|Rest], State) ->
     case parent(El, State) of
-        #xpathel{name=Name}=El -> q(El, Rest, State);
-        _                      -> q([], Rest, State)
+        [#xpathel{name=Name}]=Parent ->
+            Filtered = exml_xpath_pred:apply(Parent, Predicates),
+            q(Filtered, Rest, State);
+        _ ->
+            q([], Rest, State)
     end;
 
-q(El,[{ancestor, wildcard}|Rest], State) ->
+q(El,[{ancestor, wildcard, Predicates}|Rest], State) ->
     Els = lists:filter(fun
                 (#xpathel{name=undefined}) -> false;
                 (_) -> true
             end, ancestors(El, State)),
-    q(Els, Rest, State);
+    Filtered = exml_xpath_pred:apply(Els, Predicates),
+    q(Filtered, Rest, State);
 
-q(El,[{ancestor, Name}|Rest], State) ->
+q(El,[{ancestor, Name, Predicates}|Rest], State) ->
     Els = lists:filter(fun
                 (#xpathel{name=N}) when Name =:= N -> true;
                 (_) -> false
             end, ancestors(El, State)),
-    q(Els, Rest, State);
+    Filtered = exml_xpath_pred:apply(Els, Predicates),
+    q(Filtered, Rest, State);
+
+q(El, [{'following-sibling', wildcard, Predicates}|Rest], State) ->
+    Following = lists:filter(fun
+                ({Key,_}) when Key < El#xpathel.id -> false;
+                (_) -> true
+            end, siblings(El, State)),
+    Filtered = exml_xpath_pred:apply(Following, Predicates),
+    q(Filtered, Rest, State);
 
 q(_, _, _) ->
     [].
 
+siblings(#xpathel{id=Id}, #st{an=An}=State) ->
+    Ancestors = ancestors(Id, State),
+    error_logger:info_msg("~p~n", [Ancestors]),
+    List = lists:filter(fun
+                ({Key, _}) when Key =:= Id -> false;
+                ({_, A}) ->
+                    case  A--Ancestors of
+                        [] -> true;
+                        _ -> false
+                    end
+        end, dict:to_list(An)),
+    lists:sort(List).
+
 parent(#xpathel{id=Id}, #st{an=An}=State) ->
     case dict:find(Id, An) of
-        {ok, [Parent|_]} -> lut(Parent, State);
-        _                -> undefined
+        {ok, [Parent|_]} -> [lut(Parent, State)];
+        _                -> []
     end.
 
-ancestors(#xpathel{id=Id}, #st{an=An}=State) ->
+ancestors(#xpathel{id=Id}, State) ->
+    ancestors(Id, State);
+ancestors(Id, #st{an=An}=State) ->
     {ok, Ancestors} = dict:find(Id, An),
     [lut(Ancestor, State) || Ancestor <- Ancestors].
 
@@ -174,7 +202,8 @@ build_lut(Element) ->
     {LUT, Ancestors} = do_build_lut(Element, [], [], []),
     {dict:from_list(LUT), dict:from_list(Ancestors)}.
 
-do_build_lut(#xpathel{id=Id, children=Children}=Element, LUT, Ancestors, CurrentAncestors) ->
+do_build_lut(#xpathel{id=Id, children=Children}=Element,
+             LUT, Ancestors, CurrentAncestors) ->
     LUT1 = [{Id, Element} | LUT],
     Ancestors1 = [{Id, CurrentAncestors} | Ancestors],
     NewAncestors = [Id | CurrentAncestors],
